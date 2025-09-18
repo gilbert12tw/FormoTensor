@@ -8,9 +8,9 @@
 
 #include "simulator_tensornet.h"
 
-/// Register this Simulator class with NVQIR under name "tensornet"
+/// Register this Simulator class with NVQIR under name "formotensor"
 extern "C" {
-nvqir::CircuitSimulator *getCircuitSimulator_tensornet() {
+nvqir::CircuitSimulator *getCircuitSimulator_formotensor() {
   thread_local static auto simulator =
       std::make_unique<nvqir::SimulatorTensorNet<double>>();
   // Handle multiple runtime __nvqir__setCircuitSimulator calls before/after MPI
@@ -23,6 +23,6 @@ nvqir::CircuitSimulator *getCircuitSimulator_tensornet() {
   return simulator.get();
 }
 nvqir::CircuitSimulator *getCircuitSimulator() {
-  return getCircuitSimulator_tensornet();
+  return getCircuitSimulator_formotensor();
 }
 }

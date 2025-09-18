@@ -10,4 +10,4 @@
 
 #include "simulator_mps.h"
 
-NVQIR_REGISTER_SIMULATOR(nvqir::SimulatorMPS<float>, tensornet_mps_fp32)
+NVQIR_REGISTER_SIMULATOR(nvqir::SimulatorMPS<float>, formotensor_mps_fp32)

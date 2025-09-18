@@ -331,9 +331,9 @@ public:
   }
 
 #ifdef TENSORNET_FP32
-  virtual std::string name() const override { return "tensornet-mps-fp32"; }
+  virtual std::string name() const override { return "formotensor-mps-fp32"; }
 #else
-  virtual std::string name() const override { return "tensornet-mps"; }
+  virtual std::string name() const override { return "formotensor-mps"; }
 #endif
   CircuitSimulator *clone() override {
     thread_local static auto simulator = std::make_unique<SimulatorMPS>();

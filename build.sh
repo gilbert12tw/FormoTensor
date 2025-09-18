@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# CuTensorNet Standalone Build Script
+# FormoTensor Build Script
 
 set -e  # Exit on any error
 
 echo "========================================"
-echo "   CuTensorNet Standalone Build"
+echo "      FormoTensor Build"
 echo "========================================"
 echo ""
 
@@ -98,11 +98,11 @@ echo "✅ Build completed successfully!"
 echo "========================================"
 echo ""
 echo "🎯 Installed backends:"
-echo "   - nvqir-tensornet (FP64)"
-echo "   - nvqir-tensornet-mps (FP64)" 
-echo "   - nvqir-tensornet-fp32 (FP32)"
-echo "   - nvqir-tensornet-mps-fp32 (FP32)"
+echo "   - nvqir-formotensor (FP64)"
+echo "   - nvqir-formotensor-mps (FP64)" 
+echo "   - nvqir-formotensor-fp32 (FP32)"
+echo "   - nvqir-formotensor-mps-fp32 (FP32)"
 echo ""
 echo "🧪 Test the installation:"
-echo "   python test_cutensornet.py"
+echo "   python test_formotensor.py"
 echo ""

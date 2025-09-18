@@ -13,9 +13,9 @@
 
 // Forward declaration
 #ifdef TENSORNET_FP32
-extern "C" nvqir::CircuitSimulator *getCircuitSimulator_tensornet_fp32();
+extern "C" nvqir::CircuitSimulator *getCircuitSimulator_formotensor_fp32();
 #else
-extern "C" nvqir::CircuitSimulator *getCircuitSimulator_tensornet();
+extern "C" nvqir::CircuitSimulator *getCircuitSimulator_formotensor();
 #endif
 
 namespace nvqir {
@@ -63,9 +63,9 @@ public:
   // Nothing to do for state preparation
   virtual void prepareQubitTensorState() override {}
 #ifdef TENSORNET_FP32
-  virtual std::string name() const override { return "tensornet-fp32"; }
+  virtual std::string name() const override { return "formotensor-fp32"; }
 #else
-  virtual std::string name() const override { return "tensornet"; }
+  virtual std::string name() const override { return "formotensor"; }
 #endif
   CircuitSimulator *clone() override {
     thread_local static auto simulator = std::make_unique<SimulatorTensorNet>();
@@ -160,9 +160,9 @@ public:
 
 private:
 #ifdef TENSORNET_FP32
-  friend nvqir::CircuitSimulator * ::getCircuitSimulator_tensornet_fp32();
+  friend nvqir::CircuitSimulator * ::getCircuitSimulator_formotensor_fp32();
 #else
-  friend nvqir::CircuitSimulator * ::getCircuitSimulator_tensornet();
+  friend nvqir::CircuitSimulator * ::getCircuitSimulator_formotensor();
 #endif
   /// @brief Has cuTensorNet MPI been initialized?
   bool m_cutnMpiInitialized = false;

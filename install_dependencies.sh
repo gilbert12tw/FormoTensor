@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# CuTensorNet Standalone - Dependencies Installation Script
+# FormoTensor - Dependencies Installation Script
 # This script installs all required dependencies using conda and pip
 
 set -e  # Exit on any error
 
 echo "======================================================"
-echo "   CuTensorNet Standalone Dependencies Installation"
+echo "      FormoTensor Dependencies Installation"
 echo "======================================================"
 echo ""
 
@@ -24,14 +24,25 @@ echo "✅ Found conda: $(conda --version)"
 check_conda_env() {
     if [[ -z "$CONDA_DEFAULT_ENV" ]]; then
         echo "⚠️  Warning: No conda environment is currently active"
-        echo "It's recommended to create and activate a dedicated environment:"
-        echo "  conda create -n cutensornet-env python=3.11"
-        echo "  conda activate cutensornet-env"
+        echo "It's recommended to create and activate a dedicated environment."
         echo ""
-        read -p "Continue with base environment? (y/N): " choice
-        if [[ ! "$choice" =~ ^[Yy]$ ]]; then
-            echo "Exiting..."
-            exit 1
+        read -p "Would you like to create a new conda environment 'formotensor-env'? (Y/n): " choice
+        if [[ "$choice" =~ ^[Nn]$ ]]; then
+            echo ""
+            read -p "Continue with base environment? (y/N): " choice2
+            if [[ ! "$choice2" =~ ^[Yy]$ ]]; then
+                echo "Exiting..."
+                exit 1
+            fi
+        else
+            echo "Creating new conda environment 'formotensor-env'..."
+            conda create -n formotensor-env python=3.11 -y
+            echo ""
+            echo "✅ Environment created successfully!"
+            echo "⚠️  Please activate the environment and re-run this script:"
+            echo "  conda activate formotensor-env"
+            echo "  ./install_dependencies.sh"
+            exit 0
         fi
     else
         echo "✅ Using conda environment: $CONDA_DEFAULT_ENV"
@@ -79,9 +90,9 @@ echo ""
 echo "1️⃣  Installing GCC 11+ for C++20 support..."
 install_package "gcc=11 gxx=11" "conda-forge"
 
-# 2. Install CUDA toolkit (12.x for H100 GPU support)
+# 2. Install CUDA toolkit
 echo ""
-echo "2️⃣  Installing CUDA toolkit 12.x for H100 GPU..."
+echo "2️⃣  Installing CUDA toolkit 12.x..."
 install_package "cuda-toolkit=12.4" "nvidia"
 install_package "cuda-nvcc=12.4" "nvidia"
 install_package "cuda-cudart-dev=12.4" "nvidia"
@@ -171,13 +182,13 @@ fi
 ENV_SCRIPT="setup_environment.sh"
 cat > "$ENV_SCRIPT" << EOF
 #!/bin/bash
-# CuTensorNet Standalone Environment Setup
+# FormoTensor Environment Setup
 # Source this script before building: source setup_environment.sh
 
 # CUDA-Q paths
 export CUDA_QUANTUM_PATH="$CUDAQ_PYTHON_PATH"
 
-# CUDA toolkit paths (for H100 GPU support)
+# CUDA toolkit paths
 export CUDA_HOME="$CONDA_ENV_PATH"
 export CUDA_ROOT="$CONDA_ENV_PATH"
 export CUDA_PATH="$CONDA_ENV_PATH"
@@ -192,7 +203,7 @@ export LD_LIBRARY_PATH="$CONDA_ENV_PATH/lib:\$LD_LIBRARY_PATH"
 # Ensure CUDA tools are in PATH
 export PATH="$CONDA_ENV_PATH/bin:\$PATH"
 
-echo "Environment variables set for H100 GPU:"
+echo "Environment variables set:"
 echo "  CUDA_QUANTUM_PATH=\$CUDA_QUANTUM_PATH"
 echo "  CUDA_HOME=\$CUDA_HOME"
 echo "  CUTENSOR_ROOT=\$CUTENSOR_ROOT"  
@@ -227,7 +238,7 @@ echo ""
 echo "📌 Next steps:"
 echo "   1. Source the environment: source $ENV_SCRIPT"
 echo "   2. Build the project: ./build.sh"
-echo "   3. Test the installation: python test_cutensornet.py"
+echo "   3. Test the installation: python test_formotensor.py"
 echo ""
 echo "💡 Note: You'll need to source the environment script"
 echo "   every time you open a new terminal session."

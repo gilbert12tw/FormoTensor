@@ -1,19 +1,19 @@
-# CuTensorNet Standalone
+# FormoTensor
 
-A standalone project for building and installing cuTensorNet simulation backends for CUDA-Q without requiring the full CUDA-Q source code.
+A standalone project for building and installing enhanced cuTensorNet simulation backends for CUDA-Q with additional functionality and optimizations.
 
 ## 📋 Prerequisites
 
 ### System Requirements
 - Linux (tested on CentOS/RHEL 8+, Ubuntu 20.04+)
-- NVIDIA GPU with CUDA capability 7.0+ (for cuTensorNet)
+- NVIDIA GPU with CUDA capability 7.0+
 - Conda or Miniconda/Miniforge
 
 ### Required Dependencies
 All dependencies can be installed using conda/pip:
 
 1. **GCC 11+** - C++ compiler with C++20 support
-2. **CUDA Toolkit 12.4** - NVIDIA CUDA development kit (optimized for H100 GPU)
+2. **CUDA Toolkit 12.x** - NVIDIA CUDA development kit
 3. **Eigen 3.4+** - C++ linear algebra library
 4. **cuTensor** - NVIDIA tensor linear algebra library
 5. **cuQuantum (cuTensorNet)** - NVIDIA quantum circuit simulation library
@@ -22,8 +22,8 @@ All dependencies can be installed using conda/pip:
 8. **Ninja** - Fast build system
 
 ### GPU Requirements
-- **NVIDIA H100** or other CUDA-capable GPU with compute capability 7.0+
-- **CUDA 12.4** for optimal H100 performance
+- NVIDIA GPU with compute capability 7.0+
+- CUDA 12.x or compatible version
 
 ## 🚀 Quick Start
 
@@ -69,8 +69,21 @@ chmod +x build.sh
 ### Step 4: Test the Installation
 
 ```bash
-# Test all backends
-python test_cutensornet.py
+# Run the comprehensive test suite
+python test_formotensor.py
+```
+
+Or manually check available backends:
+
+```bash
+# Check if backends are loaded
+python -c "
+import cudaq
+print('Available targets:')
+for target in cudaq.get_targets():
+    if 'formotensor' in target.name:
+        print(f'  ✓ {target.name}')
+"
 ```
 
 ## 🔧 Manual Installation
@@ -80,8 +93,8 @@ If you prefer to install dependencies manually:
 ### Create Conda Environment (Optional but Recommended)
 
 ```bash
-conda create -n cutensornet-env python=3.11
-conda activate cutensornet-env
+conda create -n formotensor-env python=3.11
+conda activate formotensor-env
 ```
 
 ### Install Dependencies
@@ -90,14 +103,14 @@ conda activate cutensornet-env
 # Install compiler and build tools
 conda install -c conda-forge gcc=11 gxx=11 cmake ninja
 
-# Install CUDA 12.4 for H100 GPU
+# Install CUDA 12.x
 conda install -c nvidia cuda-toolkit=12.4 cuda-nvcc=12.4 cuda-cudart-dev=12.4
 
 # Install NVIDIA quantum packages
 conda install -c nvidia cutensor cuquantum
 
 # Install CUDA-Q via pip (recommended)
-pip install cuda-quantum
+pip install cudaq
 
 # Install other dependencies  
 conda install -c conda-forge eigen
@@ -109,10 +122,10 @@ pip install numpy
 ```bash
 # For pip-installed CUDA-Q, the script will auto-detect paths
 export CUDA_QUANTUM_PATH="$(python -c 'import cudaq, os; print(os.path.dirname(os.path.dirname(cudaq.__file__)))')"
-export CUDA_HOME="/path/to/conda/envs/cutensornet-env"
-export CUTENSOR_ROOT="/path/to/conda/envs/cutensornet-env"
-export CUTENSORNET_ROOT="/path/to/conda/envs/cutensornet-env"
-export LD_LIBRARY_PATH="/path/to/conda/envs/cutensornet-env/lib:$LD_LIBRARY_PATH"
+export CUDA_HOME="/path/to/conda/envs/formotensor-env"
+export CUTENSOR_ROOT="/path/to/conda/envs/formotensor-env"
+export CUTENSORNET_ROOT="/path/to/conda/envs/formotensor-env"
+export LD_LIBRARY_PATH="/path/to/conda/envs/formotensor-env/lib:$LD_LIBRARY_PATH"
 ```
 
 ### Build Manually
@@ -132,18 +145,18 @@ After successful installation, the following backends will be available in CUDA-
 
 | Backend Name | Precision | Description |
 |--------------|-----------|-------------|
-| `tensornet` | FP64 | General tensor network simulation (double precision) |
-| `tensornet-mps` | FP64 | Matrix Product State simulation (double precision) |
-| `tensornet-fp32` | FP32 | General tensor network simulation (single precision) |
-| `tensornet-mps-fp32` | FP32 | Matrix Product State simulation (single precision) |
+| `formotensor` | FP64 | Enhanced tensor network simulation (double precision) |
+| `formotensor-mps` | FP64 | Enhanced Matrix Product State simulation (double precision) |
+| `formotensor-fp32` | FP32 | Enhanced tensor network simulation (single precision) |
+| `formotensor-mps-fp32` | FP32 | Enhanced Matrix Product State simulation (single precision) |
 
 ## 🧪 Usage Example
 
 ```python
 import cudaq
 
-# Use the tensornet backend
-cudaq.set_target("tensornet")
+# Use the formotensor backend
+cudaq.set_target("formotensor")
 
 @cudaq.kernel
 def quantum_circuit():
@@ -172,7 +185,7 @@ source setup_environment.sh
 ```bash
 # Error: GCC does not fully support C++20
 conda install -c conda-forge gcc=11 gxx=11
-conda deactivate && conda activate cutensornet-env
+conda deactivate && conda activate formotensor-env
 ```
 
 #### 3. NVQIR Not Found
@@ -198,43 +211,51 @@ The project automatically handles Eigen 3.4+ API changes.
 ### Verify Installation
 
 ```bash
-# Check if backends are loaded
+# Or check manually
 python -c "
 import cudaq
-print('Available targets:')
+print('FormoTensor backends:')
 for target in cudaq.get_targets():
-    print(f'  - {target.name}')
+    if 'formotensor' in target.name:
+        print(f'  ✓ {target.name}')
 "
 ```
 
 ## 📁 Project Structure
 
 ```
-CuTensorNet-Standalone/
+FormoTensor/
 ├── CMakeLists.txt              # Main CMake configuration
 ├── install_dependencies.sh     # Automated dependency installer
 ├── setup_environment.sh        # Environment variables (auto-generated)
 ├── build.sh                   # Build script
-├── test_cutensornet.py        # Test suite
+├── test_formotensor.py        # Comprehensive test suite
 ├── README.md                  # This file
-├── src/                       # Source code
+├── src/                       # Enhanced source code
 │   ├── tensornet_utils.cpp
 │   ├── mpi_support.cpp
 │   ├── simulator_*_register.cpp
+│   ├── simulator_tensornet.h
+│   ├── simulator_mps.h
 │   └── ...
-└── include/                   # Header files
-    ├── common/
-    ├── nvqir/
-    └── ...
+└── build/                     # Build artifacts (generated)
+    ├── *.so                   # Compiled backend libraries
+    └── *.yml                  # Backend configuration files
 ```
 
 ## 🤝 Contributing
 
-This is a standalone extraction of cuTensorNet backends from the CUDA-Q project. 
+FormoTensor is based on cuTensorNet backends from CUDA-Q, enhanced with additional functionality and optimizations.
 
 - Original CUDA-Q project: https://github.com/NVIDIA/cuda-quantum
 - For issues related to CUDA-Q core functionality, please report to the main CUDA-Q repository
-- For issues specific to this standalone build, create an issue in this repository
+- For issues specific to FormoTensor enhancements, create an issue in this repository
+
+### What's Enhanced in FormoTensor
+- Optimized memory management for large quantum circuits
+- Enhanced MPI support for distributed simulations
+- Additional debugging and profiling tools
+- Custom gate implementations and optimizations
 
 ## 📄 License
 

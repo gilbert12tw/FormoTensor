@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24 FATAL_ERROR)
-project(CuTensorNetStandalone VERSION 1.0.0 LANGUAGES CXX CUDA)
+project(FormoTensor VERSION 1.0.0 LANGUAGES CXX CUDA)
 
 # Set C++ standard - require C++20 for full compatibility
 set(CMAKE_CXX_STANDARD 20)
@@ -106,7 +106,7 @@ find_file(CUTENSORNET_INC
 # Validate dependencies
 if(NOT CUTENSOR_LIB)
     message(FATAL_ERROR "Unable to find cuTensor installation. Please install with: conda install cutensor -c nvidia")
-endif()
+endif() 
 message(STATUS "CUTENSOR_LIB: ${CUTENSOR_LIB}")
 
 if(NOT CUTENSORNET_LIB OR NOT CUTENSORNET_INC)
@@ -151,7 +151,7 @@ set(TENSORNET_SOURCES
 )
 
 message(STATUS "")
-message(STATUS "=== CuTensorNet Standalone Build Configuration ===")
+message(STATUS "=== FormoTensor Build Configuration ===")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "NVQIR found: ${NVQIR_FOUND}")
@@ -160,124 +160,132 @@ message(STATUS "Targets to build:")
 
 # Helper function to write target config (mimics CUDA-Q's internal function)
 function(nvqir_write_target_config BackendName GPURequirements FilePath)
-    file (WRITE ${FilePath} "name: ${BackendName}\ndescription: \"NVQIR ${BackendName} backend\"\ngpu-requirements: ${GPURequirements}\nconfig:\n\tnvqir-simulation-backend: ${BackendName}")
+    # Convert hyphens to underscores for the backend identifier
+    string(REPLACE "-" "_" BackendIdentifier ${BackendName})
+    
+    # Write YAML content line by line to avoid formatting issues
+    file(WRITE ${FilePath} "name: ${BackendName}\n")
+    file(APPEND ${FilePath} "description: \"FormoTensor ${BackendName} backend\"\n")
+    file(APPEND ${FilePath} "gpu-requirements: ${GPURequirements}\n")
+    file(APPEND ${FilePath} "config:\n")
+    file(APPEND ${FilePath} "  nvqir-simulation-backend: ${BackendIdentifier}\n")
 endfunction()
 
-# Add the tensornet backend (FP64)
-message(STATUS "  - nvqir-tensornet (FP64)")
-add_library(nvqir-tensornet SHARED
+# Add the formotensor backend (FP64)
+message(STATUS "  - nvqir-formotensor (FP64)")
+add_library(nvqir-formotensor SHARED
     ${TENSORNET_SOURCES}
     ${CUTENSORNET_SRC_DIR}/simulator_tensornet_fp64_register.cpp
 )
 
-target_include_directories(nvqir-tensornet PRIVATE
+target_include_directories(nvqir-formotensor PRIVATE
     ${CUTENSORNET_SRC_DIR}
     ${CUDAToolkit_INCLUDE_DIRS}
     ${CUTENSORNET_INCLUDE_DIR}
     ${EIGEN3_INCLUDE_DIR}
 )
 
-target_link_libraries(nvqir-tensornet PRIVATE
+target_link_libraries(nvqir-formotensor PRIVATE
     nvqir::nvqir
     ${CUTENSORNET_LIB}
     ${CUTENSOR_LIB}
     CUDA::cudart_static
 )
 
-target_compile_definitions(nvqir-tensornet PRIVATE
+target_compile_definitions(nvqir-formotensor PRIVATE
     CUDAQ_SIMULATION_SCALAR_FP64
 )
 
-install(TARGETS nvqir-tensornet DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
-nvqir_write_target_config(tensornet TRUE ${CMAKE_BINARY_DIR}/tensornet.yml)
-install(FILES ${CMAKE_BINARY_DIR}/tensornet.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
+install(TARGETS nvqir-formotensor DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
+nvqir_write_target_config(formotensor TRUE ${CMAKE_BINARY_DIR}/formotensor.yml)
+install(FILES ${CMAKE_BINARY_DIR}/formotensor.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
 
-# Add the tensornet-mps backend (FP64)
-message(STATUS "  - nvqir-tensornet-mps (FP64)")
-add_library(nvqir-tensornet-mps SHARED
+# Add the formotensor-mps backend (FP64)
+message(STATUS "  - nvqir-formotensor-mps (FP64)")
+add_library(nvqir-formotensor-mps SHARED
     ${TENSORNET_SOURCES}
     ${CUTENSORNET_SRC_DIR}/simulator_mps_fp64_register.cpp
 )
 
-target_include_directories(nvqir-tensornet-mps PRIVATE
+target_include_directories(nvqir-formotensor-mps PRIVATE
     ${CUTENSORNET_SRC_DIR}
     ${CUDAToolkit_INCLUDE_DIRS}
     ${CUTENSORNET_INCLUDE_DIR}
     ${EIGEN3_INCLUDE_DIR}
 )
 
-target_link_libraries(nvqir-tensornet-mps PRIVATE
+target_link_libraries(nvqir-formotensor-mps PRIVATE
     nvqir::nvqir
     ${CUTENSORNET_LIB}
     ${CUTENSOR_LIB}
     CUDA::cudart_static
 )
 
-target_compile_definitions(nvqir-tensornet-mps PRIVATE
+target_compile_definitions(nvqir-formotensor-mps PRIVATE
     CUDAQ_SIMULATION_SCALAR_FP64
 )
 
-install(TARGETS nvqir-tensornet-mps DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
-nvqir_write_target_config(tensornet-mps TRUE ${CMAKE_BINARY_DIR}/tensornet-mps.yml)
-install(FILES ${CMAKE_BINARY_DIR}/tensornet-mps.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
+install(TARGETS nvqir-formotensor-mps DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
+nvqir_write_target_config(formotensor-mps TRUE ${CMAKE_BINARY_DIR}/formotensor-mps.yml)
+install(FILES ${CMAKE_BINARY_DIR}/formotensor-mps.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
 
-# Add the tensornet backend (FP32)
-message(STATUS "  - nvqir-tensornet-fp32 (FP32)")
-add_library(nvqir-tensornet-fp32 SHARED
+# Add the formotensor-fp32 backend (FP32)
+message(STATUS "  - nvqir-formotensor-fp32 (FP32)")
+add_library(nvqir-formotensor-fp32 SHARED
     ${TENSORNET_SOURCES}
     ${CUTENSORNET_SRC_DIR}/simulator_tensornet_fp32_register.cpp
 )
 
-target_include_directories(nvqir-tensornet-fp32 PRIVATE
+target_include_directories(nvqir-formotensor-fp32 PRIVATE
     ${CUTENSORNET_SRC_DIR}
     ${CUDAToolkit_INCLUDE_DIRS}
     ${CUTENSORNET_INCLUDE_DIR}
     ${EIGEN3_INCLUDE_DIR}
 )
 
-target_link_libraries(nvqir-tensornet-fp32 PRIVATE
+target_link_libraries(nvqir-formotensor-fp32 PRIVATE
     nvqir::nvqir
     ${CUTENSORNET_LIB}
     ${CUTENSOR_LIB}
     CUDA::cudart_static
 )
 
-target_compile_definitions(nvqir-tensornet-fp32 PRIVATE
+target_compile_definitions(nvqir-formotensor-fp32 PRIVATE
     CUDAQ_SIMULATION_SCALAR_FP32
 )
 
-install(TARGETS nvqir-tensornet-fp32 DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
-nvqir_write_target_config(tensornet-fp32 TRUE ${CMAKE_BINARY_DIR}/tensornet-fp32.yml)
-install(FILES ${CMAKE_BINARY_DIR}/tensornet-fp32.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
+install(TARGETS nvqir-formotensor-fp32 DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
+nvqir_write_target_config(formotensor-fp32 TRUE ${CMAKE_BINARY_DIR}/formotensor-fp32.yml)
+install(FILES ${CMAKE_BINARY_DIR}/formotensor-fp32.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
 
-# Add the tensornet-mps backend (FP32)
-message(STATUS "  - nvqir-tensornet-mps-fp32 (FP32)")
-add_library(nvqir-tensornet-mps-fp32 SHARED
+# Add the formotensor-mps-fp32 backend (FP32)
+message(STATUS "  - nvqir-formotensor-mps-fp32 (FP32)")
+add_library(nvqir-formotensor-mps-fp32 SHARED
     ${TENSORNET_SOURCES}
     ${CUTENSORNET_SRC_DIR}/simulator_mps_fp32_register.cpp
 )
 
-target_include_directories(nvqir-tensornet-mps-fp32 PRIVATE
+target_include_directories(nvqir-formotensor-mps-fp32 PRIVATE
     ${CUTENSORNET_SRC_DIR}
     ${CUDAToolkit_INCLUDE_DIRS}
     ${CUTENSORNET_INCLUDE_DIR}
     ${EIGEN3_INCLUDE_DIR}
 )
 
-target_link_libraries(nvqir-tensornet-mps-fp32 PRIVATE
+target_link_libraries(nvqir-formotensor-mps-fp32 PRIVATE
     nvqir::nvqir
     ${CUTENSORNET_LIB}
     ${CUTENSOR_LIB}
     CUDA::cudart_static
 )
 
-target_compile_definitions(nvqir-tensornet-mps-fp32 PRIVATE
+target_compile_definitions(nvqir-formotensor-mps-fp32 PRIVATE
     CUDAQ_SIMULATION_SCALAR_FP32
 )
 
-install(TARGETS nvqir-tensornet-mps-fp32 DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
-nvqir_write_target_config(tensornet-mps-fp32 TRUE ${CMAKE_BINARY_DIR}/tensornet-mps-fp32.yml)
-install(FILES ${CMAKE_BINARY_DIR}/tensornet-mps-fp32.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
+install(TARGETS nvqir-formotensor-mps-fp32 DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
+nvqir_write_target_config(formotensor-mps-fp32 TRUE ${CMAKE_BINARY_DIR}/formotensor-mps-fp32.yml)
+install(FILES ${CMAKE_BINARY_DIR}/formotensor-mps-fp32.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
 
 message(STATUS "==================================================")
 message(STATUS "")
