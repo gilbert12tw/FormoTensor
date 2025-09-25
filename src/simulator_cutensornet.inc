@@ -442,48 +442,11 @@ bool SimulatorTensorNetBase<ScalarType>::canHandleObserve() {
 /// @brief Evaluate the expectation value of a given observable
 template <typename ScalarType>
 cudaq::observe_result
-SimulatorTensorNetBase<ScalarType>::observe(const cudaq::spin_op &ham) {
-  assert(cudaq::spin_op::canonicalize(ham) == ham);
-  LOG_API_TIME();
-  prepareQubitTensorState();
-  if (!m_reuseContractionPathObserve) {
-    // If contraction path reuse is disabled, convert spin_op to
-    // cutensornetNetworkOperator_t and compute the expectation value.
-    TensorNetworkSpinOp<ScalarType> spinOp(ham, m_cutnHandle);
-    std::complex<ScalarType> expVal =
-        m_state->computeExpVal(spinOp.getNetworkOperator(),
-                               this->executionContext->numberTrajectories);
-    expVal += spinOp.getIdentityTermOffset();
-    return cudaq::observe_result(expVal.real(), ham,
-                                 cudaq::sample_result(cudaq::ExecutionResult(
-                                     {}, ham.to_string(), expVal.real())));
-  }
-
-  std::vector<std::string> termStrs;
-  std::vector<cudaq::spin_op_term> prods;
-  termStrs.reserve(ham.num_terms());
-  prods.reserve(ham.num_terms());
-  for (auto &&term : ham) {
-    termStrs.emplace_back(term.get_term_id());
-    prods.push_back(std::move(term));
-  }
-
-  // Compute the expectation value for all terms
-  const auto termExpVals = m_state->computeExpVals(
-      prods, this->executionContext->numberTrajectories);
-  std::complex<double> expVal = 0.0;
-  // Construct per-term data in the final observe_result
-  std::vector<cudaq::ExecutionResult> results;
-  results.reserve(prods.size());
-
-  for (std::size_t i = 0; i < prods.size(); ++i) {
-    expVal += termExpVals[i];
-    results.emplace_back(
-        cudaq::ExecutionResult({}, termStrs[i], termExpVals[i].real()));
-  }
-
-  cudaq::sample_result perTermData(expVal.real(), results);
-  return cudaq::observe_result(expVal.real(), ham, perTermData);
+SimulatorTensorNetBase<ScalarType>::observe(const cudaq::spin_op & /*ham*/) {
+  // Observe is disabled to avoid linking against CUDA-Q spin_op internals not
+  // exported in this environment. Use sampling APIs instead.
+  throw std::runtime_error(
+      "[formotensor] observe() is not supported in this build; use sample().");
 }
 
 template <typename ScalarType>

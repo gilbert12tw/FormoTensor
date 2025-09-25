@@ -121,7 +121,8 @@ get_filename_component(CUTENSORNET_LIB_DIR ${CUTENSORNET_LIB} DIRECTORY)
 get_filename_component(CUTENSOR_LIB_DIR ${CUTENSOR_LIB} DIRECTORY)
 
 # Set RPATH for runtime linking
-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${CUTENSORNET_LIB_DIR};${CUTENSOR_LIB_DIR}")
+set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH};${CUDA_QUANTUM_PATH}/lib;${CUTENSORNET_LIB_DIR};${CUTENSOR_LIB_DIR}")
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH};${CUDA_QUANTUM_PATH}/lib;${CUTENSORNET_LIB_DIR};${CUTENSOR_LIB_DIR}")
 
 # Determine cutensornet version
 file(READ "${CUTENSORNET_INC}" cutensornet_header)
@@ -155,7 +156,33 @@ message(STATUS "=== FormoTensor Build Configuration ===")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "NVQIR found: ${NVQIR_FOUND}")
+message(STATUS "NVQIR_SIMULATOR_PLUGIN_PATH: ${NVQIR_SIMULATOR_PLUGIN_PATH}")
+message(STATUS "NVQIR_SIMULATOR_CONFIG_PATH: ${NVQIR_SIMULATOR_CONFIG_PATH}")
 message(STATUS "CuTensorNet version: ${CUTENSORNET_VERSION}")
+# Locate CUDA-Q runtime libraries required by the simulator plugins
+find_library(CUDAQ_LIB
+    NAMES cudaq libcudaq.so
+    HINTS
+        ${CUDA_QUANTUM_PATH}/lib
+        $ENV{CONDA_PREFIX}/lib
+)
+find_library(CUDAQ_COMMON_LIB
+    NAMES cudaq-common libcudaq-common.so
+    HINTS
+        ${CUDA_QUANTUM_PATH}/lib
+        $ENV{CONDA_PREFIX}/lib
+)
+find_library(CUDAQ_OPERATOR_LIB
+    NAMES cudaq-operator libcudaq-operator.so
+    HINTS
+        ${CUDA_QUANTUM_PATH}/lib
+        $ENV{CONDA_PREFIX}/lib
+)
+
+if(NOT CUDAQ_LIB OR NOT CUDAQ_COMMON_LIB OR NOT CUDAQ_OPERATOR_LIB)
+    message(WARNING "Could not find all CUDA-Q runtime libraries (cudaq, cudaq-common, cudaq-operator). Plugins may fail to load if symbols are unresolved. Searched ${CUDA_QUANTUM_PATH}/lib and $ENV{CONDA_PREFIX}/lib.")
+endif()
+
 message(STATUS "Targets to build:")
 
 # Helper function to write target config (mimics CUDA-Q's internal function)
@@ -189,7 +216,10 @@ target_link_libraries(nvqir-formotensor PRIVATE
     nvqir::nvqir
     ${CUTENSORNET_LIB}
     ${CUTENSOR_LIB}
-    CUDA::cudart_static
+    ${CUDAQ_OPERATOR_LIB}
+    ${CUDAQ_COMMON_LIB}
+    ${CUDAQ_LIB}
+    CUDA::cudart
 )
 
 target_compile_definitions(nvqir-formotensor PRIVATE
@@ -199,6 +229,7 @@ target_compile_definitions(nvqir-formotensor PRIVATE
 install(TARGETS nvqir-formotensor DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
 nvqir_write_target_config(formotensor TRUE ${CMAKE_BINARY_DIR}/formotensor.yml)
 install(FILES ${CMAKE_BINARY_DIR}/formotensor.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
+install(FILES ${CMAKE_BINARY_DIR}/formotensor.yml DESTINATION ${CUDA_QUANTUM_PATH}/share/nvqir/simulators)
 
 # Add the formotensor-mps backend (FP64)
 message(STATUS "  - nvqir-formotensor-mps (FP64)")
@@ -218,7 +249,10 @@ target_link_libraries(nvqir-formotensor-mps PRIVATE
     nvqir::nvqir
     ${CUTENSORNET_LIB}
     ${CUTENSOR_LIB}
-    CUDA::cudart_static
+    ${CUDAQ_OPERATOR_LIB}
+    ${CUDAQ_COMMON_LIB}
+    ${CUDAQ_LIB}
+    CUDA::cudart
 )
 
 target_compile_definitions(nvqir-formotensor-mps PRIVATE
@@ -228,6 +262,7 @@ target_compile_definitions(nvqir-formotensor-mps PRIVATE
 install(TARGETS nvqir-formotensor-mps DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
 nvqir_write_target_config(formotensor-mps TRUE ${CMAKE_BINARY_DIR}/formotensor-mps.yml)
 install(FILES ${CMAKE_BINARY_DIR}/formotensor-mps.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
+install(FILES ${CMAKE_BINARY_DIR}/formotensor-mps.yml DESTINATION ${CUDA_QUANTUM_PATH}/share/nvqir/simulators)
 
 # Add the formotensor-fp32 backend (FP32)
 message(STATUS "  - nvqir-formotensor-fp32 (FP32)")
@@ -247,7 +282,10 @@ target_link_libraries(nvqir-formotensor-fp32 PRIVATE
     nvqir::nvqir
     ${CUTENSORNET_LIB}
     ${CUTENSOR_LIB}
-    CUDA::cudart_static
+    ${CUDAQ_OPERATOR_LIB}
+    ${CUDAQ_COMMON_LIB}
+    ${CUDAQ_LIB}
+    CUDA::cudart
 )
 
 target_compile_definitions(nvqir-formotensor-fp32 PRIVATE
@@ -257,6 +295,7 @@ target_compile_definitions(nvqir-formotensor-fp32 PRIVATE
 install(TARGETS nvqir-formotensor-fp32 DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
 nvqir_write_target_config(formotensor-fp32 TRUE ${CMAKE_BINARY_DIR}/formotensor-fp32.yml)
 install(FILES ${CMAKE_BINARY_DIR}/formotensor-fp32.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
+install(FILES ${CMAKE_BINARY_DIR}/formotensor-fp32.yml DESTINATION ${CUDA_QUANTUM_PATH}/share/nvqir/simulators)
 
 # Add the formotensor-mps-fp32 backend (FP32)
 message(STATUS "  - nvqir-formotensor-mps-fp32 (FP32)")
@@ -276,7 +315,10 @@ target_link_libraries(nvqir-formotensor-mps-fp32 PRIVATE
     nvqir::nvqir
     ${CUTENSORNET_LIB}
     ${CUTENSOR_LIB}
-    CUDA::cudart_static
+    ${CUDAQ_OPERATOR_LIB}
+    ${CUDAQ_COMMON_LIB}
+    ${CUDAQ_LIB}
+    CUDA::cudart
 )
 
 target_compile_definitions(nvqir-formotensor-mps-fp32 PRIVATE
@@ -286,6 +328,7 @@ target_compile_definitions(nvqir-formotensor-mps-fp32 PRIVATE
 install(TARGETS nvqir-formotensor-mps-fp32 DESTINATION ${NVQIR_SIMULATOR_PLUGIN_PATH})
 nvqir_write_target_config(formotensor-mps-fp32 TRUE ${CMAKE_BINARY_DIR}/formotensor-mps-fp32.yml)
 install(FILES ${CMAKE_BINARY_DIR}/formotensor-mps-fp32.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
+install(FILES ${CMAKE_BINARY_DIR}/formotensor-mps-fp32.yml DESTINATION ${CUDA_QUANTUM_PATH}/share/nvqir/simulators)
 
 message(STATUS "==================================================")
 message(STATUS "")

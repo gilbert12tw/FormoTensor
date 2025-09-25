@@ -30,38 +30,7 @@ TensorNetworkSpinOp<ScalarType>::TensorNetworkSpinOp(
   HANDLE_CUTN_ERROR(cutensornetCreateNetworkOperator(
       m_cutnHandle, qubitDims.size(), qubitDims.data(), cudaDataType,
       &m_cutnNetworkOperator));
-  // Heuristic threshold to perform direct observable calculation.
-  // If the number of qubits in the spin_op is small, it is more efficient to
-  // directly convert the spin_op into a matrix and perform the contraction
-  // <psi| H |psi> in one go rather than summing over term-by-term contractions.
-  constexpr std::size_t NUM_QUBITS_THRESHOLD_DIRECT_OBS = 10;
-  if (degrees.size() < NUM_QUBITS_THRESHOLD_DIRECT_OBS) {
-    const auto spinMat = spinOp.to_matrix();
-    std::vector<std::complex<ScalarType>> opMat;
-    opMat.reserve(spinMat.rows() * spinMat.cols());
-    for (size_t i = 0; i < spinMat.rows(); ++i) {
-      for (size_t j = 0; j < spinMat.cols(); ++j)
-        opMat.push_back(std::complex<ScalarType>(spinMat[{i, j}])); // row major
-    }
-    void *opMat_d{nullptr};
-    HANDLE_CUDA_ERROR(
-        cudaMalloc(&opMat_d, opMat.size() * sizeof(std::complex<ScalarType>)));
-    HANDLE_CUDA_ERROR(cudaMemcpy(
-        opMat_d, opMat.data(), opMat.size() * sizeof(std::complex<ScalarType>),
-        cudaMemcpyHostToDevice));
-    m_mat_d.emplace_back(opMat_d);
-    const std::vector<int32_t> numModes = {
-        static_cast<int32_t>(degrees.size())};
-    std::vector<const void *> pauliTensorData = {opMat_d};
-    std::vector<int32_t> stateModes(degrees.begin(), degrees.end());
-    std::vector<const int32_t *> dataStateModes = {stateModes.data()};
-    HANDLE_CUTN_ERROR(cutensornetNetworkOperatorAppendProduct(
-        m_cutnHandle, m_cutnNetworkOperator,
-        /*coefficient*/ cuDoubleComplex(1.0, 0.0), pauliTensorData.size(),
-        numModes.data(), dataStateModes.data(),
-        /*tensorModeStrides*/ nullptr, pauliTensorData.data(),
-        /*componentId*/ nullptr));
-  } else {
+  {
     // Initialize device mem for Pauli matrices
     constexpr std::complex<ScalarType> PauliI_h[4] = {
         {1.0, 0.0}, {0.0, 0.0}, {0.0, 0.0}, {1.0, 0.0}};
