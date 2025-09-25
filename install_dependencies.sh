@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # FormoTensor - Dependencies Installation Script
-# This script installs all required dependencies using conda and pip
+# This script creates a conda environment and installs all required dependencies
 
 set -e  # Exit on any error
 
@@ -20,33 +20,38 @@ fi
 
 echo "✅ Found conda: $(conda --version)"
 
-# Function to check if we're in a conda environment
-check_conda_env() {
-    if [[ -z "$CONDA_DEFAULT_ENV" ]]; then
-        echo "⚠️  Warning: No conda environment is currently active"
-        echo "It's recommended to create and activate a dedicated environment."
-        echo ""
-        read -p "Would you like to create a new conda environment 'formotensor-env'? (Y/n): " choice
-        if [[ "$choice" =~ ^[Nn]$ ]]; then
-            echo ""
-            read -p "Continue with base environment? (y/N): " choice2
-            if [[ ! "$choice2" =~ ^[Yy]$ ]]; then
-                echo "Exiting..."
-                exit 1
-            fi
+# Environment name
+ENV_NAME="formotensor-env"
+
+# Function to create and setup conda environment
+setup_conda_env() {
+    echo ""
+    echo "🏗️  Setting up conda environment..."
+    
+    # Check if environment already exists
+    if conda env list | grep -q "^$ENV_NAME"; then
+        echo "⚠️  Environment '$ENV_NAME' already exists."
+        read -p "Would you like to remove it and create fresh? (Y/n): " choice
+        if [[ ! "$choice" =~ ^[Nn]$ ]]; then
+            echo "🗑️  Removing existing environment..."
+            conda env remove -n "$ENV_NAME" -y
         else
-            echo "Creating new conda environment 'formotensor-env'..."
-            conda create -n formotensor-env python=3.11 -y
-            echo ""
-            echo "✅ Environment created successfully!"
-            echo "⚠️  Please activate the environment and re-run this script:"
-            echo "  conda activate formotensor-env"
-            echo "  ./install_dependencies.sh"
-            exit 0
+            echo "❌ Please manually remove the environment or choose a different name"
+            exit 1
         fi
-    else
-        echo "✅ Using conda environment: $CONDA_DEFAULT_ENV"
     fi
+    
+    echo "🆕 Creating new conda environment '$ENV_NAME'..."
+    conda create -n "$ENV_NAME" python=3.11 -y
+    
+    echo "✅ Environment '$ENV_NAME' created successfully!"
+    
+    # Activate environment
+    echo "🔄 Activating environment..."
+    eval "$(conda shell.bash hook)"
+    conda activate "$ENV_NAME"
+    
+    echo "✅ Environment activated: $(conda info --envs | grep '*')"
 }
 
 # Install function with error checking
@@ -80,7 +85,44 @@ install_pip_package() {
     fi
 }
 
-check_conda_env
+# Function to configure conda channels
+configure_conda_channels() {
+    echo "⚙️  Configuring conda channels..."
+    conda config --add channels nvidia
+    conda config --add channels conda-forge
+    conda config --set channel_priority strict
+    echo "✅ Conda channels configured"
+}
+
+# Function to install CUDA package with fallback
+install_cuda_package() {
+    local package_name=$1
+    local version=${2:-"12.4"}
+    local channel=${3:-"nvidia"}
+    
+    echo "Installing $package_name..."
+    
+    # Try with specific version first
+    if conda install -y -c "$channel" "$package_name=$version" 2>/dev/null; then
+        echo "✅ Successfully installed $package_name=$version"
+        return 0
+    fi
+    
+    # Try without version if specific version fails
+    if conda install -y -c "$channel" "$package_name" 2>/dev/null; then
+        echo "✅ Successfully installed $package_name (latest available)"
+        return 0
+    fi
+    
+    echo "⚠️  $package_name not available, skipping..."
+    return 1
+}
+
+# Setup environment first
+setup_conda_env
+
+# Configure channels
+configure_conda_channels
 
 echo ""
 echo "📦 Installing dependencies..."
@@ -90,39 +132,42 @@ echo ""
 echo "1️⃣  Installing GCC 11+ for C++20 support..."
 install_package "gcc=11 gxx=11" "conda-forge"
 
-# 2. Install CUDA toolkit
+# 2. Install CUDA toolkit (pin everything to 12.9 in ONE transaction)
 echo ""
-echo "2️⃣  Installing CUDA toolkit 12.x..."
-install_package "cuda-toolkit=12.4" "nvidia"
-install_package "cuda-nvcc=12.4" "nvidia"
-install_package "cuda-cudart-dev=12.4" "nvidia"
+echo "2️⃣  Installing CUDA toolkit 12.9 (pinned critical subpackages)..."
+# Pin critical CUDA components to 12.9.* so nvcc matches libcudadevrt
+install_package "cuda-toolkit=12.9.* cuda-compiler=12.9.* cuda-nvcc=12.9.* cuda-cudart=12.9.* cuda-cudart-dev=12.9.* cuda-nvrtc=12.9.* cuda-nvrtc-dev=12.9.* cuda-libraries=12.9.* cuda-libraries-dev=12.9.*" "nvidia"
+
+# Validate no mismatched CUDA packages remain (reject anything not 12.9)
+echo "🔍 Validating CUDA package versions..."
+MISMATCHED=$(conda list | awk '/^cuda-/{ if ($2 !~ /^12\.9(\.|$)/) print $1"=="$2 }')
+if [[ -n "$MISMATCHED" ]]; then
+    echo "❌ Found mismatched CUDA packages (not 12.9):"
+    echo "$MISMATCHED"
+    echo "💡 Tip: A clean re-run usually fixes this: conda env remove -n $ENV_NAME && ./install_dependencies.sh"
+    exit 1
+fi
 
 # 3. Install Eigen3 (linear algebra library)
 echo ""
 echo "3️⃣  Installing Eigen3..."
 install_package "eigen" "conda-forge"
 
-# 4. Install cuTensor
+# 4. Install cuTensor (CUDA 12 variant)
 echo ""
 echo "4️⃣  Installing cuTensor..."
-install_package "cutensor" "nvidia"
+install_package "cutensor cutensor-cuda-12" "nvidia"
 
-# 5. Install cuQuantum (includes cuTensorNet)
+# 5. Install cuQuantum (CUDA 12 variant, includes cuTensorNet)
 echo ""
 echo "5️⃣  Installing cuQuantum (cuTensorNet)..."
-install_package "cuquantum" "nvidia"
+install_package "cuquantum cuquantum-cuda-12" "nvidia"
 
-# 6. Install CUDA-Q via pip (recommended method)
+# 6. Install CUDA-Q (via pip - not available in conda)
 echo ""
-echo "6️⃣  Installing CUDA-Q via pip..."
-echo "Installing CUDA-Q via pip..."
-if pip install cudaq; then
-    echo "✅ Successfully installed CUDA-Q via pip"
-else
-    echo "❌ Failed to install CUDA-Q via pip"
-    echo "Falling back to conda installation..."
-    install_package "cudaq" "nvidia"
-fi
+echo "6️⃣  Installing CUDA-Q..."
+echo "Installing CUDA-Q 0.12.* via pip (conda not available)..."
+install_pip_package "cudaq>=0.12.0,<0.13.0"
 
 # 7. Install CMake and Ninja (build tools)
 echo ""
@@ -143,22 +188,19 @@ echo "🔧 Setting up environment variables..."
 echo ""
 
 # Get conda environment path
-CONDA_ENV_PATH=$(conda info --base)/envs/$CONDA_DEFAULT_ENV
-if [[ "$CONDA_DEFAULT_ENV" == "base" ]]; then
-    CONDA_ENV_PATH=$(conda info --base)
-fi
+CONDA_ENV_PATH=$(conda info --base)/envs/$ENV_NAME
 
-# Find CUDA-Q installation path (pip or conda)
-echo "🔍 Detecting CUDA-Q installation method..."
+# Find CUDA-Q installation path (pip installation)
+echo "🔍 Detecting CUDA-Q installation path..."
 
-# First check for pip installation
+# Check for pip installation
 PIP_CUDAQ_PATH=$(python -c "import cudaq; import os; print(os.path.dirname(cudaq.__file__))" 2>/dev/null)
 if [[ -n "$PIP_CUDAQ_PATH" ]]; then
     # CUDA-Q installed via pip
     CUDAQ_PYTHON_PATH=$(dirname "$PIP_CUDAQ_PATH")
     echo "✅ Found CUDA-Q via pip at: $CUDAQ_PYTHON_PATH"
 else
-    # Check for conda installation
+    # Check for conda installation as fallback
     CUDAQ_PYTHON_PATH=$(find "$CONDA_ENV_PATH" -path "*/site-packages" -name "cudaq*" -type d 2>/dev/null | head -1)
     if [[ -n "$CUDAQ_PYTHON_PATH" ]]; then
         CUDAQ_PYTHON_PATH=$(dirname "$CUDAQ_PYTHON_PATH")
@@ -178,30 +220,41 @@ else
     echo "❌ CUDA-Q import failed - please check installation"
 fi
 
-# Create environment setup script
+# Create environment setup script (ensures clean PATH/LD_LIBRARY_PATH)
 ENV_SCRIPT="setup_environment.sh"
 cat > "$ENV_SCRIPT" << EOF
 #!/bin/bash
 # FormoTensor Environment Setup
 # Source this script before building: source setup_environment.sh
 
+# Ensure we're in the correct conda environment
+if [[ "\$CONDA_DEFAULT_ENV" != "$ENV_NAME" ]]; then
+    echo "⚠️  Please activate the environment first: conda activate $ENV_NAME"
+    return 1
+fi
+
+# Get current conda environment path
+CONDA_ENV_PATH=\$(conda info --base)/envs/$ENV_NAME
+
 # CUDA-Q paths
 export CUDA_QUANTUM_PATH="$CUDAQ_PYTHON_PATH"
 
 # CUDA toolkit paths
-export CUDA_HOME="$CONDA_ENV_PATH"
-export CUDA_ROOT="$CONDA_ENV_PATH"
-export CUDA_PATH="$CONDA_ENV_PATH"
+export CUDA_HOME="\$CONDA_ENV_PATH"
+export CUDA_ROOT="\$CONDA_ENV_PATH"
+export CUDA_PATH="\$CONDA_ENV_PATH"
 
 # cuTensor and cuTensorNet paths
-export CUTENSOR_ROOT="$CONDA_ENV_PATH"
-export CUTENSORNET_ROOT="$CONDA_ENV_PATH"
+export CUTENSOR_ROOT="\$CONDA_ENV_PATH"
+export CUTENSORNET_ROOT="\$CONDA_ENV_PATH"
 
-# Additional CUDA library paths
-export LD_LIBRARY_PATH="$CONDA_ENV_PATH/lib:\$LD_LIBRARY_PATH"
+# Clean PATH/LD_LIBRARY_PATH from other conda CUDA envs
+LD_LIBRARY_PATH=\$(echo "\$LD_LIBRARY_PATH" | tr ':' '\n' | grep -v "/envs/" | tr '\n' ':' | sed 's/:$//')
+PATH=\$(echo "\$PATH" | tr ':' '\n' | grep -v "/envs/" | tr '\n' ':' | sed 's/:$//')
 
-# Ensure CUDA tools are in PATH
-export PATH="$CONDA_ENV_PATH/bin:\$PATH"
+# Ensure our env comes first
+export LD_LIBRARY_PATH="\$CONDA_ENV_PATH/lib:\$LD_LIBRARY_PATH"
+export PATH="\$CONDA_ENV_PATH/bin:\$PATH"
 
 echo "Environment variables set:"
 echo "  CUDA_QUANTUM_PATH=\$CUDA_QUANTUM_PATH"
@@ -212,9 +265,31 @@ echo "  LD_LIBRARY_PATH=\$LD_LIBRARY_PATH"
 
 # Verify CUDA installation
 if command -v nvcc &> /dev/null; then
+    NVCC_VERSION=\$(nvcc --version | grep release | sed 's/.*release \\([0-9]\\+\\.[0-9]\\+\\).*/\\1/')
     echo "✅ CUDA compiler: \$(nvcc --version | grep release)"
+    if [[ "\$NVCC_VERSION" == "12.9" || "\$NVCC_VERSION" == "12.9."* ]]; then
+        echo "✅ CUDA 12.9 version confirmed"
+    else
+        echo "⚠️  Warning: Expected CUDA 12.9, found \$NVCC_VERSION"
+    fi
 else
     echo "⚠️  CUDA compiler (nvcc) not found in PATH"
+fi
+
+# Verify cuTensor installation
+echo "🔍 Verifying cuTensor installation..."
+if find "\$CONDA_ENV_PATH" -name "*cutensor*" -type f 2>/dev/null | head -1 | grep -q cutensor; then
+    echo "✅ cuTensor found"
+else
+    echo "⚠️  cuTensor not found"
+fi
+
+# Verify cuQuantum installation
+echo "🔍 Verifying cuQuantum installation..."
+if find "\$CONDA_ENV_PATH" -name "*cuquantum*" -o -name "*cutensornet*" -type f 2>/dev/null | head -1 | grep -q .; then
+    echo "✅ cuQuantum/cuTensorNet found"
+else
+    echo "⚠️  cuQuantum/cuTensorNet not found"
 fi
 
 # Verify GPU
@@ -236,10 +311,28 @@ echo "✅ Installation completed successfully!"
 echo "======================================================"
 echo ""
 echo "📌 Next steps:"
-echo "   1. Source the environment: source $ENV_SCRIPT"
-echo "   2. Build the project: ./build.sh"
-echo "   3. Test the installation: python test_formotensor.py"
+echo "   For this session:"
+echo "     1. Environment is already active, run: source $ENV_SCRIPT"
+echo "     2. Build the project: ./build.sh"
+echo "     3. Test the installation: python test_formotensor.py"
 echo ""
-echo "💡 Note: You'll need to source the environment script"
-echo "   every time you open a new terminal session."
+echo "   For future sessions:"
+echo "     1. Activate environment: conda activate $ENV_NAME"
+echo "     2. Source environment: source $ENV_SCRIPT"
+echo "     3. Build/run your project"
+echo ""
+echo "💡 Environment '$ENV_NAME' has been created with all dependencies."
+echo "   All CUDA components use version 12.9 to ensure compatibility."
+echo ""
+
+# Verify final installation
+echo "🔍 Final verification:"
+echo "  Environment: $(conda info --envs | grep '*' | awk '{print $1}')"
+echo "  Python: $(python --version)"
+echo "  CUDA: $(nvcc --version 2>/dev/null | grep release || echo 'Not found')"
+if python -c "import cudaq" 2>/dev/null; then
+    echo "  CUDA-Q: ✅ Ready"
+else
+    echo "  CUDA-Q: ❌ Import failed"
+fi
 echo ""
