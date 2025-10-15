@@ -174,10 +174,36 @@ echo ""
 echo "7️⃣  Installing build tools..."
 install_package "cmake ninja" "conda-forge"
 
-# 8. Install Python packages (for testing)
+# 8. Install Python packages (for testing and tensor operations)
 echo ""
 echo "8️⃣  Installing Python testing packages..."
 install_pip_package "numpy"
+
+# 9. Install PyTorch with CUDA 12.1 support (compatible with CUDA 12.x)
+echo ""
+echo "9️⃣  Installing PyTorch with CUDA 12.1 support..."
+echo "Note: PyTorch CUDA 12.1 is compatible with CUDA 12.9 runtime"
+install_pip_package "torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121"
+
+# 10. Install pybind11 (for future DLPack C++ extension)
+echo ""
+echo "🔟 Installing pybind11..."
+install_package "pybind11" "conda-forge"
+
+# 11. Install opt_einsum for optimized tensor contraction
+echo ""
+echo "1️⃣1️⃣  Installing opt_einsum for tensor contraction..."
+install_pip_package "opt_einsum"
+
+# 12. Install CuPy with CUDA 12.x support (optional, for CUDA Array Interface)
+echo ""
+echo "1️⃣2️⃣  Installing CuPy with CUDA 12.x support (optional)..."
+echo "Note: This may take a while to build..."
+if install_pip_package "cupy-cuda12x" 2>/dev/null; then
+    echo "✅ CuPy installed successfully"
+else
+    echo "⚠️  CuPy installation skipped (not critical for basic testing)"
+fi
 
 echo ""
 echo "✅ All dependencies installed successfully!"
@@ -330,9 +356,45 @@ echo "🔍 Final verification:"
 echo "  Environment: $(conda info --envs | grep '*' | awk '{print $1}')"
 echo "  Python: $(python --version)"
 echo "  CUDA: $(nvcc --version 2>/dev/null | grep release || echo 'Not found')"
+
+# Verify CUDA-Q
 if python -c "import cudaq" 2>/dev/null; then
-    echo "  CUDA-Q: ✅ Ready"
+    CUDAQ_VERSION=$(python -c "import cudaq; print(cudaq.__version__)" 2>/dev/null)
+    echo "  CUDA-Q: ✅ Ready (v$CUDAQ_VERSION)"
 else
     echo "  CUDA-Q: ❌ Import failed"
 fi
+
+# Verify PyTorch
+if python -c "import torch" 2>/dev/null; then
+    TORCH_VERSION=$(python -c "import torch; print(torch.__version__)" 2>/dev/null)
+    TORCH_CUDA=$(python -c "import torch; print('CUDA ' + torch.version.cuda if torch.cuda.is_available() else 'CPU only')" 2>/dev/null)
+    echo "  PyTorch: ✅ Ready (v$TORCH_VERSION, $TORCH_CUDA)"
+else
+    echo "  PyTorch: ❌ Import failed"
+fi
+
+# Verify pybind11
+if python -c "import pybind11" 2>/dev/null; then
+    PYBIND_VERSION=$(python -c "import pybind11; print(pybind11.__version__)" 2>/dev/null)
+    echo "  pybind11: ✅ Ready (v$PYBIND_VERSION)"
+else
+    echo "  pybind11: ❌ Not available"
+fi
+
+# Verify opt_einsum
+if python -c "import opt_einsum" 2>/dev/null; then
+    echo "  opt_einsum: ✅ Ready"
+else
+    echo "  opt_einsum: ⚠️  Not available"
+fi
+
+# Verify CuPy (optional)
+if python -c "import cupy" 2>/dev/null; then
+    CUPY_VERSION=$(python -c "import cupy; print(cupy.__version__)" 2>/dev/null)
+    echo "  CuPy: ✅ Ready (v$CUPY_VERSION)"
+else
+    echo "  CuPy: ⚠️  Not installed (optional)"
+fi
+
 echo ""

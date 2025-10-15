@@ -330,5 +330,11 @@ nvqir_write_target_config(formotensor-mps-fp32 TRUE ${CMAKE_BINARY_DIR}/formoten
 install(FILES ${CMAKE_BINARY_DIR}/formotensor-mps-fp32.yml DESTINATION ${NVQIR_SIMULATOR_CONFIG_PATH})
 install(FILES ${CMAKE_BINARY_DIR}/formotensor-mps-fp32.yml DESTINATION ${CUDA_QUANTUM_PATH}/share/nvqir/simulators)
 
+# ==================================================
+# Python Extension Module (pybind11)
+# ==================================================
+message(STATUS "Configuring Python extension module...")
+add_subdirectory(python)
+
 message(STATUS "==================================================")
 message(STATUS "")
