@@ -20,7 +20,7 @@ def test_backend(backend_name):
         return False
     
     success_count = 0
-    total_tests = 2
+    total_tests = 3
     
     # Test 1: Simple Bell state circuit
     try:
@@ -37,7 +37,23 @@ def test_backend(backend_name):
     except Exception as e:
         print(f"❌ Bell circuit failed: {e}")
     
-    # Test 2: Parameterized circuit
+    # Test 2: GHZ state circuit (3-qubit entanglement)
+    try:
+        @cudaq.kernel
+        def ghz_circuit():
+            qubits = cudaq.qvector(3)
+            h(qubits[0])
+            cx(qubits[0], qubits[1])
+            cx(qubits[1], qubits[2])
+            mz(qubits)
+        
+        result = cudaq.sample(ghz_circuit)
+        print(f"✓ GHZ circuit: {len(result)} samples")
+        success_count += 1
+    except Exception as e:
+        print(f"❌ GHZ circuit failed: {e}")
+    
+    # Test 3: Parameterized circuit
     try:
         @cudaq.kernel
         def parameterized_circuit(theta: float):

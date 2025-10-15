@@ -1,26 +1,24 @@
 # FormoTensor Python Bridge
 
-簡單的 pybind11 接口，用於從 CUDA-Q 電路中提取 Tensor Network。
+A simple pybind11 interface for extracting Tensor Networks from CUDA-Q circuits.
 
-## 功能
+## Features
 
-1. **提取 Tensor Network 資訊**：從 CUDA-Q 電路中獲取 tensor 的 metadata
-2. **提取 Tensor 數據**：將 GPU 上的 tensor 數據複製到 NumPy array（使用 NumPy copy 方法）
-3. **PyTorch 對接**：輕鬆轉換為 PyTorch tensor 進行進一步操作
-4. **DLPack 優化空間**：未來可以替換為 zero-copy DLPack 傳輸
+1. **Extract Tensor Network Information**: Get tensor metadata from CUDA-Q circuits
+2. **Extract Tensor Data**: Copy tensor data from GPU to NumPy arrays (using NumPy copy method)
+3. **PyTorch Integration**: Easy conversion to PyTorch tensors for further operations
+4. **DLPack Optimization (Planned)**: Future zero-copy transfer support
 
-## 編譯和安裝
+## Build and Installation
 
 ```bash
-# 在 FormoTensor 根目錄
-cd build
-cmake .. -GNinja
-ninja install
+# From FormoTensor root directory
+./REBUILD.sh
 ```
 
-這會將 `formotensor_bridge` 模塊安裝到您的 Python 環境中。
+This will build and install the `formotensor_bridge` module to your Python environment.
 
-## 使用範例
+## Usage Example
 
 ```python
 import cudaq
@@ -28,120 +26,146 @@ import formotensor_bridge as ftb
 import numpy as np
 import torch
 
-# 1. 設定 FormoTensor backend
+# 1. Set tensornet backend
 cudaq.set_target("tensornet")
 
-# 2. 定義並執行量子電路
+# 2. Define quantum circuit
 @cudaq.kernel
-def my_circuit():
-    q = cudaq.qvector(3)
+def bell_circuit():
+    q = cudaq.qvector(2)
     h(q[0])
     cx(q[0], q[1])
-    cx(q[1], q[2])
 
-result = cudaq.sample(my_circuit, shots_count=100)
+# 3. Get quantum state
+state = cudaq.get_state(bell_circuit)
 
-# 3. 提取 Tensor Network 資訊
-num_tensors = ftb.TensorNetworkExtractor.get_num_tensors()
-num_qubits = ftb.TensorNetworkExtractor.get_num_qubits()
-
-print(f"Qubits: {num_qubits}, Tensors: {num_tensors}")
-
-# 4. 提取單個 tensor 數據（NumPy copy）
-tensor_data = ftb.TensorNetworkExtractor.extract_tensor_data(0)
-print(f"Tensor shape: {tensor_data.shape}")
-
-# 5. 轉換為 PyTorch（在 GPU 上）
-torch_tensor = torch.from_numpy(tensor_data.copy()).to('cuda')
-print(f"PyTorch tensor on: {torch_tensor.device}")
-
-# 6. 在 PyTorch 中進行操作
-modified_tensor = torch_tensor * 0.5  # 簡單的縮放操作
-
-# 7. 轉回 NumPy（如果需要）
-result_numpy = modified_tensor.cpu().numpy()
+# 4. Check if state supports tensor network
+if ftb.TensorNetworkHelper.has_tensors(state):
+    # 5. Get number of qubits
+    num_qubits = ftb.TensorNetworkHelper.get_num_qubits(state)
+    print(f"Qubits: {num_qubits}")
+    
+    # 6. Get all tensor information
+    all_info = ftb.TensorNetworkHelper.get_all_tensors_info(state)
+    print(f"Tensors: {len(all_info)}")
+    
+    # 7. Extract tensor data (NumPy copy from GPU to CPU)
+    tensor_data = ftb.TensorNetworkHelper.extract_tensor_data(state, 0)
+    print(f"Tensor shape: {tensor_data.shape}")
+    
+    # 8. Convert to PyTorch
+    torch_tensor = torch.from_numpy(tensor_data)
+    
+    # 9. Move to GPU (if available)
+    if torch.cuda.is_available():
+        torch_tensor = torch_tensor.to('cuda')
+    
+    # 10. Perform operations in PyTorch
+    modified_tensor = torch_tensor * 0.5
+    
+    # 11. Convert back to NumPy (if needed)
+    result_numpy = modified_tensor.cpu().numpy()
 ```
 
-## API 參考
+## API Reference
 
-### `TensorNetworkExtractor`
+### `TensorNetworkHelper`
 
-#### 靜態方法
+Static helper class for tensor network operations.
 
-- `get_num_tensors() -> int`
-  - 獲取當前 tensor network 中的 tensor 數量
+#### Methods
 
-- `get_num_qubits() -> int`
-  - 獲取當前電路中的 qubit 數量
+- `get_num_qubits(state) -> int`
+  - Get the number of qubits in the quantum state
 
-- `extract_tensor_info(kernel_name: str = "") -> List[TensorInfo]`
-  - 提取所有 tensor 的 metadata 資訊
+- `has_tensors(state) -> bool`
+  - Check if the state supports tensor network extraction
 
-- `extract_tensor_data(tensor_idx: int, kernel_name: str = "") -> np.ndarray`
-  - 提取指定 tensor 的數據（複製到 host memory）
-  - 返回 NumPy array（complex128）
+- `get_tensor_info(state, idx) -> TensorInfo`
+  - Get metadata for a specific tensor (without extracting data)
+
+- `extract_tensor_data(state, idx) -> np.ndarray`
+  - Extract tensor data from GPU to CPU (NumPy array, complex128)
+
+- `get_all_tensors_info(state) -> List[TensorInfo]`
+  - Get metadata for all tensors in the network
 
 ### `TensorInfo`
 
-Tensor 的 metadata 結構：
+Tensor metadata structure:
 
-- `target_qubits: List[int]` - 目標 qubit 索引
-- `control_qubits: List[int]` - 控制 qubit 索引
-- `is_adjoint: bool` - 是否為伴隨操作
-- `is_unitary: bool` - 是否為單一操作
-- `data_size: int` - 數據大小（bytes）
-- `device_ptr: int` - GPU device pointer（用於調試）
+- `shape: List[int]` - Tensor dimensions (e.g., [2, 2] for single-qubit gate)
+- `total_elements: int` - Total number of elements
+- `size_bytes: int` - Size in bytes
+- `dtype: str` - Data type (usually "complex128")
+- `device_ptr: int` - GPU device pointer (for debugging)
 
-## 測試
+## Testing
 
 ```bash
-# 運行測試腳本
-python python/test_bridge.py
+# Run quick test
+./RUN_TESTS.sh simple
+
+# Or run specific test
+python scripts/test_bridge_simple.py
+
+# Run all tests
+./RUN_TESTS.sh all
 ```
 
-## 目前限制
+## Current Limitations
 
-1. **NumPy Copy 方法**：目前使用 `cudaMemcpy` 從 device 複製到 host
-   - 簡單、可靠
-   - 有記憶體拷貝開銷
-   - 適合測試和小規模數據
+1. **NumPy Copy Method**: Currently uses `cudaMemcpy` from device to host
+   - Simple and reliable
+   - Has memory copy overhead
+   - Suitable for testing and small-scale data
 
-2. **未來優化**：計劃使用 DLPack
-   - Zero-copy 傳輸
-   - 直接在 GPU 上操作
-   - 更高效率
+2. **Future Optimization**: Planned DLPack support
+   - Zero-copy transfer
+   - Direct GPU operations
+   - Higher efficiency
 
-## 下一步
+## Roadmap
 
-1. ✅ 創建基本的 pybind11 接口
-2. ✅ 測試 NumPy copy 方法
-3. ✅ 驗證 PyTorch 對接
-4. ⏳ 實作 DLPack zero-copy 傳輸
-5. ⏳ 支持 tensor contraction
-6. ⏳ 支持自定義 tensor network 操作
+1. ✅ Create basic pybind11 interface
+2. ✅ Test NumPy copy method
+3. ⏳ Verify PyTorch integration
+4. ⏳ Implement DLPack zero-copy transfer
+5. ⏳ Support tensor contraction
+6. ⏳ Support custom tensor network operations
 
-## 疑難排解
+## Troubleshooting
 
-### 模塊導入失敗
+### Module Import Failed
 
 ```
 ImportError: cannot import name 'formotensor_bridge'
 ```
 
-**解決方案**：確保已經執行 `ninja install`
+**Solution**: Make sure you have run `./REBUILD.sh` to build and install the module.
 
-### 找不到 simulator
+### Backend Not Supported
 
 ```
-RuntimeError: Current backend is not a TensorNet simulator
+RuntimeError: State does not support tensor network extraction
 ```
 
-**解決方案**：確保使用 `cudaq.set_target("tensornet")` 或其他 FormoTensor backend
+**Solution**: Ensure you're using a tensornet backend:
+```python
+cudaq.set_target("tensornet")
+```
 
-### CUDA 錯誤
+### CUDA Errors
 
-如果遇到 CUDA 相關錯誤，檢查：
-- CUDA 版本兼容性
-- GPU 記憶體是否足夠
-- 是否正確設置 `LD_LIBRARY_PATH`
+If you encounter CUDA-related errors, check:
+- CUDA version compatibility
+- Sufficient GPU memory
+- `LD_LIBRARY_PATH` is correctly set
+
+## Documentation
+
+For complete documentation, see:
+- **[Main Guide](../TENSORNET_EXTRACTION.md)** - Complete usage guide
+- **[API Reference](../docs/FORMOTENSOR_BRIDGE_API.md)** - Detailed API documentation
+- **[Examples](../scripts/)** - Example scripts and tools
 
