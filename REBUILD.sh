@@ -7,8 +7,6 @@ echo "=========================================="
 echo "Rebuilding formotensor_bridge"
 echo "=========================================="
 
-cd /work/u4876763/FormoTensor/build
-
 echo ""
 echo "[1/3] Cleaning old Python module..."
 rm -f python/formotensor_bridge*.so
