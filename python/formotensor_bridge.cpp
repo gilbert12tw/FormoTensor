@@ -9,9 +9,13 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 #include <pybind11/complex.h>
-#include <cuda_runtime.h>
 #include <complex>
 #include <vector>
+
+// Conditionally include CUDA
+#ifdef HAVE_CUDA
+#include <cuda_runtime.h>
+#endif
 
 namespace py = pybind11;
 
@@ -24,6 +28,23 @@ struct TensorInfo {
     uint64_t device_ptr;             // Device pointer (for debugging)
     
     TensorInfo() : total_elements(0), size_bytes(0), device_ptr(0), dtype("unknown") {}
+};
+
+// Topology information for a gate/tensor
+struct GateTopology {
+    std::vector<int32_t> target_qubits;
+    std::vector<int32_t> control_qubits;
+    bool is_adjoint;
+    bool is_unitary;
+    size_t tensor_idx;
+    
+    GateTopology() : is_adjoint(false), is_unitary(true), tensor_idx(0) {}
+    
+    GateTopology(const std::vector<int32_t>& targets,
+                 const std::vector<int32_t>& controls,
+                 bool adjoint, bool unitary, size_t idx)
+        : target_qubits(targets), control_qubits(controls),
+          is_adjoint(adjoint), is_unitary(unitary), tensor_idx(idx) {}
 };
 
 // Helper functions to work with Python State objects
@@ -132,6 +153,7 @@ public:
                 std::vector<std::complex<double>> host_data(total_size);
                 
                 // Copy from device to host
+#ifdef HAVE_CUDA
                 cudaError_t err = cudaMemcpy(
                     host_data.data(),
                     device_ptr,
@@ -144,6 +166,12 @@ public:
                         "CUDA memcpy failed: " + std::string(cudaGetErrorString(err))
                     );
                 }
+#else
+                throw std::runtime_error(
+                    "CUDA support not available - cannot copy tensor data from device. "
+                    "Please rebuild with CUDA support."
+                );
+#endif
                 
                 // Create NumPy array
                 std::vector<ssize_t> shape(extents.begin(), extents.end());
@@ -195,6 +223,166 @@ public:
         
         return tensors;
     }
+    
+    // Try to extract topology information from State object
+    static GateTopology get_tensor_topology(py::object state, size_t idx) {
+        GateTopology topo;
+        topo.tensor_idx = idx;
+        
+        try {
+            // Strategy 1: Check if state has a method to get applied ops
+            if (py::hasattr(state, "getAppliedOps")) {
+                py::object ops = state.attr("getAppliedOps")();
+                if (py::hasattr(ops, "__getitem__")) {
+                    py::object op = ops[py::cast(idx)];
+                    
+                    // Extract fields
+                    if (py::hasattr(op, "targetQubitIds")) {
+                        topo.target_qubits = op.attr("targetQubitIds").cast<std::vector<int32_t>>();
+                    }
+                    if (py::hasattr(op, "controlQubitIds")) {
+                        topo.control_qubits = op.attr("controlQubitIds").cast<std::vector<int32_t>>();
+                    }
+                    if (py::hasattr(op, "isAdjoint")) {
+                        topo.is_adjoint = op.attr("isAdjoint").cast<bool>();
+                    }
+                    if (py::hasattr(op, "isUnitary")) {
+                        topo.is_unitary = op.attr("isUnitary").cast<bool>();
+                    }
+                    return topo;
+                }
+            }
+            
+            // Strategy 2: Check tensor object itself
+            if (py::hasattr(state, "getTensor")) {
+                py::object tensor_obj = state.attr("getTensor")(idx);
+                
+                // Try common attribute names
+                std::vector<std::string> target_attrs = {
+                    "targetQubitIds", "target_qubits", "targets", 
+                    "targetQubits", "qubitIds", "qubits"
+                };
+                std::vector<std::string> control_attrs = {
+                    "controlQubitIds", "control_qubits", "controls",
+                    "controlQubits"
+                };
+                
+                // Try to find target qubits
+                for (const auto& attr : target_attrs) {
+                    if (py::hasattr(tensor_obj, attr.c_str())) {
+                        try {
+                            auto value = tensor_obj.attr(attr.c_str());
+                            // Check if it's callable
+                            if (py::hasattr(value, "__call__")) {
+                                value = value();
+                            }
+                            topo.target_qubits = value.cast<std::vector<int32_t>>();
+                            break;
+                        } catch (...) {
+                            continue;
+                        }
+                    }
+                }
+                
+                // Try to find control qubits
+                for (const auto& attr : control_attrs) {
+                    if (py::hasattr(tensor_obj, attr.c_str())) {
+                        try {
+                            auto value = tensor_obj.attr(attr.c_str());
+                            if (py::hasattr(value, "__call__")) {
+                                value = value();
+                            }
+                            topo.control_qubits = value.cast<std::vector<int32_t>>();
+                            break;
+                        } catch (...) {
+                            continue;
+                        }
+                    }
+                }
+                
+                // Try to find adjoint flag
+                if (py::hasattr(tensor_obj, "isAdjoint") || py::hasattr(tensor_obj, "is_adjoint")) {
+                    try {
+                        auto attr = py::hasattr(tensor_obj, "isAdjoint") ? "isAdjoint" : "is_adjoint";
+                        auto value = tensor_obj.attr(attr);
+                        if (py::hasattr(value, "__call__")) {
+                            value = value();
+                        }
+                        topo.is_adjoint = value.cast<bool>();
+                    } catch (...) {}
+                }
+            }
+            
+            // Strategy 3: Infer from tensor shape (limited information)
+            if (topo.target_qubits.empty()) {
+                TensorInfo info = get_tensor_info(state, idx);
+                
+                // For single-qubit gate (shape [2,2]), we can't infer which qubit
+                // For two-qubit gate (shape [2,2,2,2]), we can't infer which qubits
+                // This is a fallback that provides minimal info
+                
+                size_t num_qubits_in_gate = info.shape.size() / 2;
+                
+                // Mark as unknown by leaving empty
+                // User will need to provide topology manually
+            }
+            
+        } catch (const std::exception& e) {
+            // If extraction fails, return empty topology
+            // User can still provide topology manually
+        }
+        
+        return topo;
+    }
+    
+    // Get all topologies
+    static std::vector<GateTopology> get_all_topologies(py::object state) {
+        std::vector<GateTopology> topologies;
+        
+        try {
+            // First try to get number of tensors
+            size_t num_tensors = 0;
+            
+            if (py::hasattr(state, "getTensors")) {
+                py::object tensors_obj = state.attr("getTensors")();
+                if (py::hasattr(tensors_obj, "__len__")) {
+                    num_tensors = py::len(tensors_obj);
+                }
+            } else {
+                // Try to count tensors
+                auto infos = get_all_tensors_info(state);
+                num_tensors = infos.size();
+            }
+            
+            // Extract topology for each tensor
+            for (size_t i = 0; i < num_tensors; ++i) {
+                try {
+                    GateTopology topo = get_tensor_topology(state, i);
+                    topologies.push_back(topo);
+                } catch (...) {
+                    // Add empty topology for this tensor
+                    GateTopology empty_topo;
+                    empty_topo.tensor_idx = i;
+                    topologies.push_back(empty_topo);
+                }
+            }
+            
+        } catch (const std::exception& e) {
+            throw std::runtime_error(
+                std::string("Failed to get topologies: ") + e.what()
+            );
+        }
+        
+        return topologies;
+    }
+    
+    // Check if topology information is available
+    static bool has_topology_info(py::object state) {
+        // Check various methods that might provide topology
+        return py::hasattr(state, "getAppliedOps") ||
+               py::hasattr(state, "get_applied_ops") ||
+               py::hasattr(state, "_get_topology_info");
+    }
 };
 
 // Python module definition
@@ -228,6 +416,36 @@ PYBIND11_MODULE(formotensor_bridge, m) {
                    ", dtype=" + info.dtype + ">";
         });
     
+    // GateTopology structure
+    py::class_<GateTopology>(m, "GateTopology")
+        .def(py::init<>())
+        .def_readwrite("target_qubits", &GateTopology::target_qubits,
+                      "Target qubit indices")
+        .def_readwrite("control_qubits", &GateTopology::control_qubits,
+                      "Control qubit indices")
+        .def_readwrite("is_adjoint", &GateTopology::is_adjoint,
+                      "Whether this is an adjoint operation")
+        .def_readwrite("is_unitary", &GateTopology::is_unitary,
+                      "Whether this is a unitary operation")
+        .def_readwrite("tensor_idx", &GateTopology::tensor_idx,
+                      "Index of this tensor in the network")
+        .def("__repr__", [](const GateTopology& topo) {
+            auto vec_to_str = [](const std::vector<int32_t>& v) {
+                std::string s = "[";
+                for (size_t i = 0; i < v.size(); ++i) {
+                    if (i > 0) s += ", ";
+                    s += std::to_string(v[i]);
+                }
+                s += "]";
+                return s;
+            };
+            
+            return "<GateTopology: targets=" + vec_to_str(topo.target_qubits) +
+                   ", controls=" + vec_to_str(topo.control_qubits) +
+                   ", adjoint=" + (topo.is_adjoint ? "True" : "False") +
+                   ", idx=" + std::to_string(topo.tensor_idx) + ">";
+        });
+    
     // Main helper class (works with Python cudaq.State objects)
     py::class_<TensorNetworkHelper>(m, "TensorNetworkHelper")
         .def_static("get_num_qubits", &TensorNetworkHelper::get_num_qubits,
@@ -244,9 +462,21 @@ PYBIND11_MODULE(formotensor_bridge, m) {
                    py::arg("state"), py::arg("tensor_idx"))
         .def_static("get_all_tensors_info", &TensorNetworkHelper::get_all_tensors_info,
                    "Get information about all tensors in the network",
+                   py::arg("state"))
+        .def_static("get_tensor_topology", &TensorNetworkHelper::get_tensor_topology,
+                   "Get topology information for a specific tensor\n\n"
+                   "Attempts to extract target/control qubits and other metadata.\n"
+                   "Returns empty topology if information is not available.",
+                   py::arg("state"), py::arg("tensor_idx"))
+        .def_static("get_all_topologies", &TensorNetworkHelper::get_all_topologies,
+                   "Get topology information for all tensors in the network\n\n"
+                   "Returns a list of GateTopology objects, one for each tensor.",
+                   py::arg("state"))
+        .def_static("has_topology_info", &TensorNetworkHelper::has_topology_info,
+                   "Check if the state object provides topology information",
                    py::arg("state"));
     
     // Version info
-    m.attr("__version__") = "0.2.0";
+    m.attr("__version__") = "0.3.0";
 }
 
